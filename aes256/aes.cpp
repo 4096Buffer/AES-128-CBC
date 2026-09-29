@@ -98,13 +98,11 @@ void AES::ShiftRows(Block& state) {
 	}
 }
 
-void AES::CreateRoundKeys(const std::string& secret, unsigned char round_keys[11][4][4]) {
+void AES::CreateRoundKeys(const std::string& secret, Block (&round_keys)[11]) {
 	if (secret.size() != 16)
 		throw std::runtime_error("AES-128 KEY must be 16 bytes!");
 
 	Block key_matrix{};
-
-	unsigned char round_keys[11][4][4]{};
 
 	for (size_t i = 0; i < 16; ++i) {
 		key_matrix[i % 4][i / 4] = static_cast<unsigned char>(secret[i]);
@@ -156,6 +154,23 @@ void AES::CreateRoundKeys(const std::string& secret, unsigned char round_keys[11
 
 std::string AES::Encrypt(std::string& raw, const std::string& secret) {
 	std::vector<Block> blocks = GroupBlocks(raw);
+	Block round_keys[11];
+
+	CreateRoundKeys(secret, round_keys);
+
+	for (auto& b : blocks) {
+		AddRoundKey(b, round_keys[0]);
+
+		for (size_t i = 1; i <= 10; ++i) { // 1-9 rounds
+			SubBytes(b);
+			ShiftRows(b);
+			if (i < 10) {
+				MixColumns(b);
+			}
+			AddRoundKey(b, round_keys[i]);
+		}
+	}
+
 
 	return "";
 }

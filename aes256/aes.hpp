@@ -12,7 +12,7 @@ public:
 	std::string Decrypt(std::string& encrypted, const std::string& secret);
 private:
 	std::vector<Block> GroupBlocks(std::string& data);
-	void CreateRoundKeys(const std::string& secret, unsigned char round_keys[11][4][4]);
+	void CreateRoundKeys(const std::string& secret, Block(&round_keys)[11]);
     void AddRoundKey(Block& state, const Block& round_key);
     void SubBytes(Block& state);
     void ShiftRows(Block& state);
