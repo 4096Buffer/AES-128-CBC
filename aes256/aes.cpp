@@ -66,8 +66,15 @@ void AES::SubBytes(Block& state) {
 
 void AES::MixColumns(Block& state) {
 	for (size_t col = 0; col < 4; ++col) {
-		state[0][col] = (Mul2(state[0][col])) ^ (Mul3(state[1][col])) ^ state[2][col] ^ state[3][col];
-		state[1][col] = state[0][col] ^ Mul2(state[1][col])
+		unsigned char a0 = state[0][col];
+		unsigned char a1 = state[1][col];
+		unsigned char a2 = state[2][col];
+		unsigned char a3 = state[3][col];
+
+		state[0][col] = Mul2(a0) ^ Mul3(a1) ^ a2 ^ a3;
+		state[1][col] = a0 ^ Mul2(a1) ^ Mul3(a2) ^ a3;
+		state[2][col] = a0 ^ a1 ^ Mul2(a2) ^ Mul3(a3);
+		state[3][col] = Mul3(a0) ^ a1 ^ a2 ^ Mul2(a3);
 	}
 }
 
