@@ -14,6 +14,20 @@ private:
 	std::vector<Block> GroupBlocks(std::string& data);
 	void CreateRoundKeys(const std::string& secret, unsigned char round_keys[11][4][4]);
     void AddRoundKey(Block& state, const Block& round_key);
+    void SubBytes(Block& state);
+    void ShiftRows(Block& state);
+    void MixColumns(Block& state);
+
+    inline unsigned char Mul2(unsigned char x) {
+        if (x & 0x80)
+            return (x << 1) ^ 0x1B;
+
+        return x << 1;
+    }
+
+    inline unsigned char Mul3(unsigned char x) {
+        return Mul2(x) ^ x; // 2x + x = 3x;
+    }
 	
     static constexpr unsigned char SBOX[256] = {
         0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,

@@ -22,13 +22,10 @@ std::vector<Block> AES::GroupBlocks(std::string& data) {
 	size_t i = 0;
 	
 	while (i < data.length()) {
-		std::cout << "I: " << i << '\n';
-
 		char c{};
 
 		for (size_t j = 0; j < 16; ++j) {
 			c = *(first_ptr + i + j);
-
 			bytes[j % 4][j / 4] = c;
 		}
 
@@ -55,6 +52,41 @@ void AES::AddRoundKey(Block& state, const Block& round_key) {
 	for (size_t row = 0; row < 4; ++row) {
 		for (size_t col = 0; col < 4; ++col) {
 			state[row][col] ^= round_key[row][col];
+		}
+	}
+}
+
+void AES::SubBytes(Block& state) {
+	for (size_t row = 0; row < 4; ++row) {
+		for (size_t col = 0; col < 4; ++col) {
+			state[row][col] = SBOX[state[row][col]];
+		}
+	}
+}
+
+void AES::MixColumns(Block& state) {
+	for (size_t col = 0; col < 4; ++col) {
+		state[0][col] = (Mul2(state[0][col])) ^ (Mul3(state[1][col])) ^ state[2][col] ^ state[3][col];
+		state[1][col] = state[0][col] ^ Mul2(state[1][col])
+	}
+}
+
+// A B C D -> A B C D
+// E F G H -> 
+// I J K L
+
+
+
+void AES::ShiftRows(Block& state) {
+	for (size_t row = 0; row < 4; ++row) {
+		unsigned char temp[4];
+
+		for (size_t col = 0; col < 4; ++col) {
+			temp[col] = state[row][col];
+		}
+
+		for (size_t col = 0; col < 4; ++col) {
+			state[row][col] = temp[(col + row) % 4];
 		}
 	}
 }
