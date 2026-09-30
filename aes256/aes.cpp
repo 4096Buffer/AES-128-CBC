@@ -203,6 +203,22 @@ void AES::EncryptBlock(Block& block, const Block(&round_keys)[11]) {
 	}
 }
 
+std::string AES::Decrypt(std::string& encrypted, const std::string& secret) {
+	Block iv;
+
+	for (size_t i = 0; i < 16; ++i) {
+		iv[i % 4][i / 4] = encrypted[i];
+	}
+
+	Block blocks;
+
+	for (size_t i = 0; i < 16 * encrypted.length() - 16; ++i) {
+		blocks[i % 4][i / 4] = encrypted[i];
+	}
+
+
+}
+
 std::string AES::Encrypt(std::string& raw, const std::string& secret) {
 	std::vector<Block> blocks = GroupBlocks(raw);
 	Block round_keys[11];
