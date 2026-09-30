@@ -152,25 +152,76 @@ void AES::CreateRoundKeys(const std::string& secret, Block (&round_keys)[11]) {
 	}
 }
 
+void AES::GenerateIV(Block& iv) {
+	std::random_device rd;
+
+	for (size_t row = 0; row < 4; ++row) {
+		for (size_t col = 0; col < 4; ++col) {
+			iv[row][col] = static_cast<unsigned char>(rd() & 0xFF);
+		}
+	}
+}
+
+void AES::CBCBlocks(std::vector<Block>& blocks, Block& iv, const Block(&round_keys)[11]) {
+	GenerateIV(iv);
+
+	if (blocks.empty())
+		return;
+
+	for (size_t row = 0; row < 4; ++row) {
+		for (size_t col = 0; col < 4; ++col) {
+			blocks[0][row][col] ^= iv[row][col];
+		}
+	}
+	
+	EncryptBlock(blocks[0], round_keys);
+
+	for (size_t i = 1; i < blocks.size(); ++i) {
+
+		for (size_t row = 0; row < 4; ++row) {
+			for (size_t col = 0; col < 4; ++col) {
+				blocks[i][row][col] ^= blocks[i-1][row][col];
+			}
+		}
+
+		EncryptBlock(blocks[i], round_keys);
+	}
+}
+
+void AES::EncryptBlock(Block& block, const Block(&round_keys)[11]) {
+	AddRoundKey(block, round_keys[0]);
+
+	for (size_t i = 1; i <= 10; ++i) { // 1-9 rounds
+		SubBytes(block);
+		ShiftRows(block);
+
+		if (i < 10) {
+			MixColumns(block);
+		}
+
+		AddRoundKey(block, round_keys[i]);
+	}
+}
+
 std::string AES::Encrypt(std::string& raw, const std::string& secret) {
 	std::vector<Block> blocks = GroupBlocks(raw);
 	Block round_keys[11];
+	Block iv{};
 
 	CreateRoundKeys(secret, round_keys);
+	CBCBlocks(blocks, iv, round_keys);
 
-	for (auto& b : blocks) {
-		AddRoundKey(b, round_keys[0]);
+	std::string result;
 
-		for (size_t i = 1; i <= 10; ++i) { // 1-9 rounds
-			SubBytes(b);
-			ShiftRows(b);
-			if (i < 10) {
-				MixColumns(b);
-			}
-			AddRoundKey(b, round_keys[i]);
+	for (size_t i = 0; i < 16; ++i) {
+		result.push_back(iv[i % 4][i / 4]);
+	}
+
+	for (const auto& block : blocks) {
+		for (size_t i = 0; i < 16; ++i) {
+			result.push_back(block[i % 4][i / 4]);
 		}
 	}
 
-
-	return "";
+	return result;
 }

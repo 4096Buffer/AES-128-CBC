@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstring>
 #include <array>
+#include <random>
 
 using Block = std::array<std::array<unsigned char, 4>, 4>;
 
@@ -17,6 +18,9 @@ private:
     void SubBytes(Block& state);
     void ShiftRows(Block& state);
     void MixColumns(Block& state);
+    void GenerateIV(Block& iv);
+    void CBCBlocks(std::vector<Block>& blocks, Block& iv, const Block(&round_keys)[11]);
+    void EncryptBlock(Block& block, const Block(&round_keys)[11]);
 
     inline unsigned char Mul2(unsigned char x) {
         if (x & 0x80)
