@@ -8,8 +8,6 @@ std::vector<Block> AES::GroupBlocks(std::string& data, bool add_padding) {
 		throw std::runtime_error("Ciphertext length must be multiple of 16 bytes!");
 	}
 
-	char* first_ptr = data.data();
-
 	if (add_padding) {
 		int full_blocks = data.length() / 16;
 		int last_i = 16 * (full_blocks + 1);
@@ -17,10 +15,8 @@ std::vector<Block> AES::GroupBlocks(std::string& data, bool add_padding) {
 
 		data.resize(last_i);
 
-		first_ptr = data.data();
-
 		for (size_t i = last_i - padding; i < last_i; ++i) {
-			*(first_ptr + i) = padding;
+			data[i] = padding;
 		}
 	}
 	
@@ -30,7 +26,7 @@ std::vector<Block> AES::GroupBlocks(std::string& data, bool add_padding) {
 		char c{};
 
 		for (size_t j = 0; j < 16; ++j) {
-			c = *(first_ptr + i + j);
+			c = data[i + j];
 			bytes[j % 4][j / 4] = c;
 		}
 
@@ -38,16 +34,6 @@ std::vector<Block> AES::GroupBlocks(std::string& data, bool add_padding) {
 		bytes = {};
 
 		i += 16;
-	}
-
-	for (const auto& b : blocks) {
-		for (const auto& row : b) {
-			for (auto el : row) {
-				std::cout << static_cast<int>(el) << ' ';
-			}
-			std::cout << '\n';
-		}
-		std::cout << "##################\n";
 	}
 
 	return blocks;
@@ -83,11 +69,6 @@ void AES::MixColumns(Block& state) {
 	}
 }
 
-// A B C D -> A B C D
-// E F G H -> 
-// I J K L
-
-
 
 void AES::ShiftRows(Block& state) {
 	for (size_t row = 0; row < 4; ++row) {
@@ -102,9 +83,6 @@ void AES::ShiftRows(Block& state) {
 		}
 	}
 }
-
-// F G H E 0 1 2 3
-// E F G H 
 
 void AES::InvShiftRows(Block& state) {
 	for (size_t row = 0; row < 4; ++row) {
@@ -121,11 +99,6 @@ void AES::InvShiftRows(Block& state) {
 }
 
 void AES::InvSubBytes(Block& state) {
-	unsigned char INV_SBOX[256];
-
-	for (int i = 0; i < 256; ++i) {
-		INV_SBOX[SBOX[i]] = static_cast<unsigned char>(i);
-	}
 
 	for (size_t row = 0; row < 4; ++row) {
 		for (size_t col = 0; col < 4; ++col) {
@@ -148,7 +121,7 @@ void AES::InvMixColumns(Block& state) {
 	}
 }
 
-void AES::CreateRoundKeys(const std::string& secret, Block (&round_keys)[11]) {
+void AES::CreateRoundKeys(const std::string& secret, RoundKeys& round_keys) {
 	if (secret.size() != 16)
 		throw std::runtime_error("AES-128 KEY must be 16 bytes!");
 
@@ -172,21 +145,15 @@ void AES::CreateRoundKeys(const std::string& secret, Block (&round_keys)[11]) {
 			round_keys[round - 1][3][3],
 		};
 
-		//ROT WORD
-
 		unsigned char first = last_column[0];
 		last_column[0] = last_column[1];
 		last_column[1] = last_column[2];
 		last_column[2] = last_column[3];
 		last_column[3] = first;
 
-		//subword
-
 		for (size_t i = 0; i < 4; ++i) {
 			last_column[i] = SBOX[last_column[i]];
 		}
-
-		//RCON
 
 		last_column[0] ^= RCON[round];
 
@@ -212,7 +179,7 @@ void AES::GenerateIV(Block& iv) {
 	}
 }
 
-void AES::CBCBlocks(std::vector<Block>& blocks, Block& iv, const Block(&round_keys)[11]) {
+void AES::EncryptCBC(std::vector<Block>& blocks, Block& iv, const RoundKeys& round_keys) {
 	GenerateIV(iv);
 
 	if (blocks.empty())
@@ -237,16 +204,10 @@ void AES::CBCBlocks(std::vector<Block>& blocks, Block& iv, const Block(&round_ke
 	}
 }
 
-void AES::DeCBCBlocks(std::vector<Block>& blocks, Block iv, const Block(&round_keys)[11]) {
+void AES::DecryptCBC(std::vector<Block>& blocks, Block iv, const RoundKeys& round_keys) {
 	if (blocks.empty()) return;
 
-	Block previous{};
-
-	for (size_t row = 0; row < 4; ++row) {
-		for (size_t col = 0; col < 4; ++col) {
-			previous[row][col] = iv[row][col];
-		}
-	}
+	Block previous = iv;
 
 	for (auto& block : blocks) {
 		Block current_cipher{};
@@ -273,10 +234,10 @@ void AES::DeCBCBlocks(std::vector<Block>& blocks, Block iv, const Block(&round_k
 	}
 }
 
-void AES::EncryptBlock(Block& block, const Block(&round_keys)[11]) {
+void AES::EncryptBlock(Block& block, const RoundKeys& round_keys) {
 	AddRoundKey(block, round_keys[0]);
 
-	for (size_t i = 1; i <= 10; ++i) { // 1-9 rounds
+	for (size_t i = 1; i <= 10; ++i) { 
 		SubBytes(block);
 		ShiftRows(block);
 
@@ -288,7 +249,7 @@ void AES::EncryptBlock(Block& block, const Block(&round_keys)[11]) {
 	}
 }
 
-void AES::DecryptBlock(Block& block, const Block(&round_keys)[11]) {
+void AES::DecryptBlock(Block& block, const RoundKeys& round_keys) {
 	AddRoundKey(block, round_keys[10]);
 
 	for (int round = 9; round >= 1; --round) {
@@ -303,9 +264,12 @@ void AES::DecryptBlock(Block& block, const Block(&round_keys)[11]) {
 	AddRoundKey(block, round_keys[0]);
 }
 
-std::string AES::Decrypt(std::string& encrypted, const std::string& secret) {
+std::string AES::Decrypt(std::string encrypted, const std::string& secret) {
+	if (encrypted.size() < 32)
+		throw std::runtime_error("Invalid encrypted cypher text");
+
 	Block iv{};
-	Block round_keys[11];
+	RoundKeys round_keys{};
 
 	for (size_t i = 0; i < 16; ++i) {
 		iv[i % 4][i / 4] = encrypted[i];
@@ -315,7 +279,7 @@ std::string AES::Decrypt(std::string& encrypted, const std::string& secret) {
 	std::vector<Block> blocks = GroupBlocks(data, false);
 
 	CreateRoundKeys(secret, round_keys);
-	DeCBCBlocks(blocks, iv, round_keys);
+	DecryptCBC(blocks, iv, round_keys);
 
 	std::string result;
 
@@ -325,16 +289,28 @@ std::string AES::Decrypt(std::string& encrypted, const std::string& secret) {
 		}
 	}
 
+	size_t padding = static_cast<unsigned char>(result.back());
+
+	if (padding == 0 || padding > 16 || padding > result.size())
+		throw std::runtime_error("Invalid PKCS#7 padding!");
+
+	for (size_t i = 0; i < padding; ++i) {
+		if (static_cast<unsigned char>(result[result.size() - 1 - i]) != padding)
+			throw std::runtime_error("Invalid PKCS#7 padding");
+	}
+
+	result.resize(result.size() - padding);
+
 	return result;
 }
 
-std::string AES::Encrypt(std::string& raw, const std::string& secret) {
+std::string AES::Encrypt(std::string raw, const std::string& secret) {
 	std::vector<Block> blocks = GroupBlocks(raw);
-	Block round_keys[11];
+	RoundKeys round_keys{};
 	Block iv{};
 
 	CreateRoundKeys(secret, round_keys);
-	CBCBlocks(blocks, iv, round_keys);
+	EncryptCBC(blocks, iv, round_keys);
 
 	std::string result;
 

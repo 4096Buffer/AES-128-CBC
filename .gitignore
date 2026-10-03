@@ -64,3 +64,8 @@ packages/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# CMake
+build/
+out/
+CMakeUserPresets.json

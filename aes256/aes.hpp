@@ -1,65 +1,64 @@
 #pragma once
-#include <iostream>
 #include <vector>
-#include <cstring>
+#include <string>
+#include <stdexcept>
 #include <array>
 #include <random>
 
 using Block = std::array<std::array<unsigned char, 4>, 4>;
+using RoundKeys = std::array<Block, 11>;
 
-class AES {
-public:
-	std::string Encrypt(std::string& raw, const std::string& secret);
-	std::string Decrypt(std::string& encrypted, const std::string& secret);
-private:
-	std::vector<Block> GroupBlocks(std::string& data, bool add_padding=true);
+namespace AES {
+     std::string Encrypt(std::string raw, const std::string& secret);
+     std::string Decrypt(std::string encrypted, const std::string& secret);
+     std::vector<Block> GroupBlocks(std::string& data, bool add_padding=true);
 
-	void CreateRoundKeys(const std::string& secret, Block(&round_keys)[11]);
-    void AddRoundKey(Block& state, const Block& round_key);
+     void CreateRoundKeys(const std::string& secret, RoundKeys& round_keys);
+     void AddRoundKey(Block& state, const Block& round_key);
 
-    void SubBytes(Block& state);
-    void ShiftRows(Block& state);
-    void MixColumns(Block& state);
-    void GenerateIV(Block& iv);
+     void SubBytes(Block& state);
+     void ShiftRows(Block& state);
+     void MixColumns(Block& state);
+     void GenerateIV(Block& iv);
 
-    void InvSubBytes(Block& state);
-    void InvShiftRows(Block& state);
-    void InvMixColumns(Block& state);
+     void InvSubBytes(Block& state);
+     void InvShiftRows(Block& state);
+     void InvMixColumns(Block& state);
 
-    void CBCBlocks(std::vector<Block>& blocks, Block& iv, const Block(&round_keys)[11]);
-    void DeCBCBlocks(std::vector<Block>& blocks, Block iv, const Block(&round_keys)[11]);
+     void EncryptCBC(std::vector<Block>& blocks, Block& iv, const RoundKeys& round_keys);
+     void DecryptCBC(std::vector<Block>& blocks, Block iv, const RoundKeys& round_keys);
 
-    void EncryptBlock(Block& block, const Block(&round_keys)[11]);
-    void DecryptBlock(Block& block, const Block(&round_keys)[11]);
+     void EncryptBlock(Block& block, const RoundKeys& round_keys);
+     void DecryptBlock(Block& block, const RoundKeys& round_keys);
 
-    inline unsigned char Mul2(unsigned char x) {
+     inline unsigned char Mul2(unsigned char x) {
         if (x & 0x80)
             return (x << 1) ^ 0x1B;
 
         return x << 1;
-    }
+     }
 
-    inline unsigned char Mul3(unsigned char x) {
+     inline unsigned char Mul3(unsigned char x) {
         return Mul2(x) ^ x; // 2x + x = 3x;
-    }
+     }
 
-    inline unsigned char Mul9(unsigned char x) {
+     inline unsigned char Mul9(unsigned char x) {
         return Mul2(Mul2(Mul2(x))) ^ x;
-    }
+     }
 
-    inline unsigned char Mul11(unsigned char x) {
+     inline unsigned char Mul11(unsigned char x) {
         return Mul2(Mul2(Mul2(x))) ^ Mul2(x) ^ x;
-    }
+     }
 
-    inline unsigned char Mul13(unsigned char x) {
+     inline unsigned char Mul13(unsigned char x) {
         return Mul2(Mul2(Mul2(x))) ^ Mul2(Mul2(x)) ^ x;
-    }
+     }
 
-    inline unsigned char Mul14(unsigned char x) {
+     inline unsigned char Mul14(unsigned char x) {
         return Mul2(Mul2(Mul2(x))) ^ Mul2(Mul2(x)) ^ Mul2(x);
-    }
-	
-    static constexpr unsigned char SBOX[256] = {
+     }
+
+     constexpr unsigned char SBOX[256] = {
         0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
         0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
         0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0,
@@ -92,19 +91,20 @@ private:
         0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
         0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68,
         0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
-    };
+     };
 
-    static constexpr unsigned char RCON[11] = {
-        0x00,
-        0x01,
-        0x02,
-        0x04,
-        0x08,
-        0x10,
-        0x20,
-        0x40,
-        0x80,
-        0x1B,
-        0x36
-    };
+     constexpr std::array<unsigned char, 256> INV_SBOX = [] {
+        std::array<unsigned char, 256> inv{};
+
+        for (int i = 0; i < 256; ++i) {
+            inv[SBOX[i]] = static_cast<unsigned char>(i);
+        }
+
+        return inv;
+     }();
+
+     constexpr unsigned char RCON[11] = {
+        0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 
+        0x80, 0x1B, 0x36
+     };
 };

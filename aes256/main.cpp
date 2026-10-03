@@ -1,10 +1,9 @@
 #include <iostream>
 #include "aes.hpp"
 
-std::string ToHex(const std::string& data)
-{
+std::string ToHex(const std::string& data) {
 	static const char* hex = "0123456789ABCDEF";
-
+	
 	std::string out;
 	out.reserve(data.size() * 2);
 
@@ -18,15 +17,14 @@ std::string ToHex(const std::string& data)
 
 int main() {
 	std::string input;
-	std::string secret = "1234567891234567";
+	std::string secret = "1234567891234567"; // 16 bytes EXAMPLE KEY
 
 	std::cout << "AES 256 - encryption \n Type your data: ";
 	std::cin >> input;
 
-	AES aes;
-	std::string cipher_text = aes.Encrypt(input, secret);
+	std::string cipher_text = AES::Encrypt(input, secret);
 
-	std::cout << ToHex(cipher_text) << '\n';
-	std::cout << "DECRYPT..\n";
-	std::cout << aes.Decrypt(cipher_text, secret) << '\n';
+	std::cout << "ENCRYPTED TEXT CONVERTED TO HEX: " << ToHex(cipher_text) << '\n';
+	
+	std::cout << "DECRYPTED PLAIN TEXT: " << AES::Decrypt(cipher_text, secret) << '\n';
 }
