@@ -12,15 +12,25 @@ public:
 	std::string Encrypt(std::string& raw, const std::string& secret);
 	std::string Decrypt(std::string& encrypted, const std::string& secret);
 private:
-	std::vector<Block> GroupBlocks(std::string& data);
+	std::vector<Block> GroupBlocks(std::string& data, bool add_padding=true);
+
 	void CreateRoundKeys(const std::string& secret, Block(&round_keys)[11]);
     void AddRoundKey(Block& state, const Block& round_key);
+
     void SubBytes(Block& state);
     void ShiftRows(Block& state);
     void MixColumns(Block& state);
     void GenerateIV(Block& iv);
+
+    void InvSubBytes(Block& state);
+    void InvShiftRows(Block& state);
+    void InvMixColumns(Block& state);
+
     void CBCBlocks(std::vector<Block>& blocks, Block& iv, const Block(&round_keys)[11]);
+    void DeCBCBlocks(std::vector<Block>& blocks, Block iv, const Block(&round_keys)[11]);
+
     void EncryptBlock(Block& block, const Block(&round_keys)[11]);
+    void DecryptBlock(Block& block, const Block(&round_keys)[11]);
 
     inline unsigned char Mul2(unsigned char x) {
         if (x & 0x80)
@@ -31,6 +41,22 @@ private:
 
     inline unsigned char Mul3(unsigned char x) {
         return Mul2(x) ^ x; // 2x + x = 3x;
+    }
+
+    inline unsigned char Mul9(unsigned char x) {
+        return Mul2(Mul2(Mul2(x))) ^ x;
+    }
+
+    inline unsigned char Mul11(unsigned char x) {
+        return Mul2(Mul2(Mul2(x))) ^ Mul2(x) ^ x;
+    }
+
+    inline unsigned char Mul13(unsigned char x) {
+        return Mul2(Mul2(Mul2(x))) ^ Mul2(Mul2(x)) ^ x;
+    }
+
+    inline unsigned char Mul14(unsigned char x) {
+        return Mul2(Mul2(Mul2(x))) ^ Mul2(Mul2(x)) ^ Mul2(x);
     }
 	
     static constexpr unsigned char SBOX[256] = {

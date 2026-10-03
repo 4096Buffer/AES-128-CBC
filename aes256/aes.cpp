@@ -1,22 +1,27 @@
 #include "aes.hpp"
 
-std::vector<Block> AES::GroupBlocks(std::string& data) {
+std::vector<Block> AES::GroupBlocks(std::string& data, bool add_padding) {
 	std::vector<Block> blocks;
 	Block bytes{};
-	
-	std::cout << data << '\n';
-	std::cout << "length: " << data.length() << '\n';
 
-	int full_blocks = data.length() / 16;
-	int last_i = 16 * (full_blocks + 1);
-	size_t padding = 16 - (data.length() % 16);
-
-	data.resize(last_i);
+	if (!add_padding && data.size() % 16 != 0) {
+		throw std::runtime_error("Ciphertext length must be multiple of 16 bytes!");
+	}
 
 	char* first_ptr = data.data();
 
-	for (size_t i = last_i - padding; i < last_i; ++i) {
-		*(first_ptr + i) = padding;
+	if (add_padding) {
+		int full_blocks = data.length() / 16;
+		int last_i = 16 * (full_blocks + 1);
+		size_t padding = 16 - (data.length() % 16);
+
+		data.resize(last_i);
+
+		first_ptr = data.data();
+
+		for (size_t i = last_i - padding; i < last_i; ++i) {
+			*(first_ptr + i) = padding;
+		}
 	}
 	
 	size_t i = 0;
@@ -95,6 +100,51 @@ void AES::ShiftRows(Block& state) {
 		for (size_t col = 0; col < 4; ++col) {
 			state[row][col] = temp[(col + row) % 4];
 		}
+	}
+}
+
+// F G H E 0 1 2 3
+// E F G H 
+
+void AES::InvShiftRows(Block& state) {
+	for (size_t row = 0; row < 4; ++row) {
+		unsigned char temp[4];
+
+		for (size_t col = 0; col < 4; ++col) {
+			temp[col] = state[row][col];
+		}
+
+		for (size_t col = 0; col < 4; ++col) {
+			state[row][col] = temp[(col - row + 4) % 4];
+		}
+	}
+}
+
+void AES::InvSubBytes(Block& state) {
+	unsigned char INV_SBOX[256];
+
+	for (int i = 0; i < 256; ++i) {
+		INV_SBOX[SBOX[i]] = static_cast<unsigned char>(i);
+	}
+
+	for (size_t row = 0; row < 4; ++row) {
+		for (size_t col = 0; col < 4; ++col) {
+			state[row][col] = INV_SBOX[state[row][col]];
+		}
+	}
+}
+
+void AES::InvMixColumns(Block& state) {
+	for (size_t col = 0; col < 4; ++col) {
+		unsigned char a0 = state[0][col];
+		unsigned char a1 = state[1][col];
+		unsigned char a2 = state[2][col];
+		unsigned char a3 = state[3][col];
+
+		state[0][col] = Mul14(a0) ^ Mul11(a1) ^ Mul13(a2) ^ Mul9(a3);
+		state[1][col] = Mul9(a0) ^ Mul14(a1) ^ Mul11(a2) ^ Mul13(a3);
+		state[2][col] = Mul13(a0) ^ Mul9(a1) ^ Mul14(a2) ^ Mul11(a3);
+		state[3][col] = Mul11(a0) ^ Mul13(a1) ^ Mul9(a2) ^ Mul14(a3);
 	}
 }
 
@@ -177,7 +227,6 @@ void AES::CBCBlocks(std::vector<Block>& blocks, Block& iv, const Block(&round_ke
 	EncryptBlock(blocks[0], round_keys);
 
 	for (size_t i = 1; i < blocks.size(); ++i) {
-
 		for (size_t row = 0; row < 4; ++row) {
 			for (size_t col = 0; col < 4; ++col) {
 				blocks[i][row][col] ^= blocks[i-1][row][col];
@@ -185,6 +234,42 @@ void AES::CBCBlocks(std::vector<Block>& blocks, Block& iv, const Block(&round_ke
 		}
 
 		EncryptBlock(blocks[i], round_keys);
+	}
+}
+
+void AES::DeCBCBlocks(std::vector<Block>& blocks, Block iv, const Block(&round_keys)[11]) {
+	if (blocks.empty()) return;
+
+	Block previous{};
+
+	for (size_t row = 0; row < 4; ++row) {
+		for (size_t col = 0; col < 4; ++col) {
+			previous[row][col] = iv[row][col];
+		}
+	}
+
+	for (auto& block : blocks) {
+		Block current_cipher{};
+
+		for (size_t row = 0; row < 4; ++row) {
+			for (size_t col = 0; col < 4; ++col) {
+				current_cipher[row][col] = block[row][col];
+			}
+		}
+
+		DecryptBlock(block, round_keys);
+
+		for (size_t row = 0; row < 4; ++row) {
+			for (size_t col = 0; col < 4; ++col) {
+				block[row][col] ^= previous[row][col];
+			}
+		}
+
+		for (size_t row = 0; row < 4; ++row) {
+			for (size_t col = 0; col < 4; ++col) {
+				previous[row][col] = current_cipher[row][col];
+			}
+		}
 	}
 }
 
@@ -203,20 +288,44 @@ void AES::EncryptBlock(Block& block, const Block(&round_keys)[11]) {
 	}
 }
 
+void AES::DecryptBlock(Block& block, const Block(&round_keys)[11]) {
+	AddRoundKey(block, round_keys[10]);
+
+	for (int round = 9; round >= 1; --round) {
+		InvShiftRows(block);
+		InvSubBytes(block);
+		AddRoundKey(block, round_keys[round]);
+		InvMixColumns(block);
+	}
+
+	InvShiftRows(block);
+	InvSubBytes(block);
+	AddRoundKey(block, round_keys[0]);
+}
+
 std::string AES::Decrypt(std::string& encrypted, const std::string& secret) {
-	Block iv;
+	Block iv{};
+	Block round_keys[11];
 
 	for (size_t i = 0; i < 16; ++i) {
 		iv[i % 4][i / 4] = encrypted[i];
 	}
 
-	Block blocks;
+	std::string data = encrypted.erase(0, 16);
+	std::vector<Block> blocks = GroupBlocks(data, false);
 
-	for (size_t i = 0; i < 16 * encrypted.length() - 16; ++i) {
-		blocks[i % 4][i / 4] = encrypted[i];
+	CreateRoundKeys(secret, round_keys);
+	DeCBCBlocks(blocks, iv, round_keys);
+
+	std::string result;
+
+	for (const auto& block : blocks) {
+		for (size_t i = 0; i < 16; ++i) {
+			result.push_back(block[i % 4][i / 4]);
+		}
 	}
 
-
+	return result;
 }
 
 std::string AES::Encrypt(std::string& raw, const std::string& secret) {
